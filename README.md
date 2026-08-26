@@ -82,6 +82,30 @@ below; it is one extra command and still needs no API key.
 
 To remove it: `./uninstall.sh` (add `--purge` to delete the config too).
 
+## Install as a plugin
+
+Prefer Claude Code's plugin system? claude-vox's own repo doubles as a
+marketplace, so two in-session commands install it -- no clone, no `install.sh`:
+
+```
+/plugin marketplace add Ishan-sa/claude-vox
+/plugin install claude-vox@claude-vox
+```
+
+You get the same three hooks and the same command, here namespaced
+**`/claude-vox:vox`**. There is no install script to run backend detection, so
+the first session after enabling writes a config tuned to your machine on its
+own. For the neural voice, run `setup-edge-tts.sh` from the plugin's directory
+(the path `/plugin` shows you), or clone the repo just for that step.
+
+Restart Claude Code after installing, then `/claude-vox:vox on`.
+
+**Pick one install path, not both.** Plugin hooks and the hooks `install.sh`
+writes into `settings.json` both fire, with no de-duplication between them, so
+running the clone install *and* the plugin at the same time can speak each line
+twice. Use whichever suits you -- `./uninstall.sh` backs out the clone install,
+and the `/plugin` menu disables the plugin.
+
 ## How it works
 
 Three hooks, all of which exit 0 no matter what goes wrong -- a broken speaker
