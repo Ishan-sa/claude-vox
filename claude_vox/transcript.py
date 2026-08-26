@@ -100,6 +100,64 @@ def clean(text):
 _BULLET = re.compile(r"^\s*([-*+]|\d+[.)]|#{1,6}\s)")
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
 
+# --- speakable(): keep spoken lines from reading like a terminal -------------
+#
+# A summary read aloud must never spell out `npx tsc --noEmit`, a file path, or
+# localhost:3000 - it sounds like a robot dictating a screen. These strip the
+# few token shapes that are unmistakably code, and deliberately leave ordinary
+# prose (and plain decimals like 3.5) untouched. The model's own marker line is
+# usually already clean; this is the safety net, and it also grooms the live
+# intro, which is Claude's real first sentence.
+_FENCED = re.compile(r"```.*?```", re.S)
+_URLISH = re.compile(r"\b\w+://\S+|\bwww\.\S+", re.I)
+_INLINE_CODE = re.compile(r"`+([^`]*)`+")
+_PLAIN_WORD = re.compile(r"^[A-Za-z]+(?:['-][A-Za-z]+)*$")
+_FLAG = re.compile(r"^-{1,2}[A-Za-z][\w-]*$")
+_HOST_PORT = re.compile(r"^[\w.-]+:\d+")
+_IP = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}\b")
+_FILE_EXT = re.compile(
+    r"\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|c|cc|cpp|h|hpp|cs|php|swift|kt"
+    r"|json|ya?ml|toml|ini|cfg|conf|env|md|rst|txt|csv|tsv|log|sh|bash|zsh|fish"
+    r"|sql|html?|xml|css|scss|less|mp3|wav|ogg|flac|png|jpe?g|gif|svg|pdf|zip"
+    r"|tar|gz)$", re.I)
+_STRIP_EDGES = "\"'`.,;:!?()[]{}<>"
+
+
+def _is_techy_token(token):
+    """True when a bare word is code, not speech: a path, flag, host, filename."""
+    if "/" in token or "\\" in token:
+        return True
+    core = token.strip(_STRIP_EDGES)
+    if not core:
+        return False
+    return bool(_FLAG.match(core) or _HOST_PORT.match(core)
+                or _IP.match(core) or _FILE_EXT.search(core))
+
+
+def speakable(text, limit=None):
+    """Rewrite a line so it reads aloud as speech, not as a screen dump.
+
+    Fenced code, links, code-shaped inline spans, paths, flags, hosts and
+    filenames are removed; plain prose and ordinary numbers are left alone.
+    Optionally capped to `limit` characters at a sentence boundary.
+    """
+    if not text:
+        return ""
+    text = _FENCED.sub(" ", text)
+    text = _URLISH.sub(" ", text)
+    # An inline span is spoken only when it is a single ordinary word ("list");
+    # anything command- or path-shaped is dropped rather than read out.
+    text = _INLINE_CODE.sub(
+        lambda m: m.group(1) if _PLAIN_WORD.match(m.group(1).strip()) else " ",
+        text)
+    kept = [tok for tok in text.split() if not _is_techy_token(tok)]
+    text = clean(" ".join(kept))
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text)   # no space before punctuation
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    if limit:
+        text = cap(text, limit)
+    return text
+
 
 def prose_paragraphs(text):
     """Return the response's prose paragraphs, dropping code and structure.
