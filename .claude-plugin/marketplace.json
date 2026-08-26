@@ -1,0 +1,11 @@
+{
+  "name": "claude-vox",
+  "owner": { "name": "Ishan Sachdeva", "url": "https://github.com/Ishan-sa" },
+  "plugins": [
+    {
+      "name": "claude-vox",
+      "source": "./",
+      "description": "Claude Code reads its own answers aloud through your speakers."
+    }
+  ]
+}

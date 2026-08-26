@@ -1,0 +1,10 @@
+{
+  "name": "claude-vox",
+  "description": "Claude Code reads its own answers aloud -- a live intro as it starts working, then a spoken summary of the whole turn. Zero dependencies.",
+  "version": "0.2.0",
+  "author": { "name": "Ishan Sachdeva", "url": "https://github.com/Ishan-sa" },
+  "homepage": "https://github.com/Ishan-sa/claude-vox",
+  "repository": "https://github.com/Ishan-sa/claude-vox",
+  "license": "MIT",
+  "keywords": ["tts", "text-to-speech", "voice", "hooks", "accessibility"]
+}
