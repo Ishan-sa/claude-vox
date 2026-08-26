@@ -12,9 +12,17 @@ import shutil
 
 DEFAULTS = {
     "enabled": False,
+    # What to speak from each response:
+    #   "bookends" - Claude's own first and last paragraph (default)
+    #   "intro"    - just the opening line
+    #   "summary"  - just the closing line
+    #   "marker"   - only a line the model prefixes with `marker` below
+    # A marker line, when present, always overrides the mode.
+    "speech_mode": "bookends",
+    "segment_chars": 280,
     "marker": "\U0001f50a",
     "backend": "command",
-    "max_chars": 400,
+    "max_chars": 700,
     "timeout": 8,
     "http": {
         "url": "http://127.0.0.1:5050/speak",
@@ -38,7 +46,7 @@ DEFAULTS = {
     # feedback while the turn runs rather than only at the end. Phrases are
     # cached after first synthesis so they play with no delay.
     "opener": {
-        "enabled": True,
+        "enabled": False,
         "phrases": [
             "On it, Sir.",
             "Right away, Sir.",

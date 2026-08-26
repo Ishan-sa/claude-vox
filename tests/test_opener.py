@@ -63,8 +63,10 @@ class CachePath(unittest.TestCase):
 
 class OpenerDefaults(unittest.TestCase):
     def test_shipped_defaults_are_usable(self):
+        # Off by default now that Claude's own intro fills the opener role,
+        # but the phrases must stay valid for anyone who turns it back on.
         opener = config.DEFAULTS["opener"]
-        self.assertTrue(opener["enabled"])
+        self.assertFalse(opener["enabled"])
         self.assertTrue(all(isinstance(p, str) and p for p in opener["phrases"]))
 
 

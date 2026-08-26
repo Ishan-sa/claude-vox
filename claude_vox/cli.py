@@ -32,14 +32,18 @@ def _event():
 
 
 def cmd_stop(_args):
-    """Stop hook: speak the marker line from the response just finished."""
+    """Stop hook: speak Claude's own words from the response just finished."""
     cfg = config.load()
     if not cfg.get("enabled"):
         return 0
     path = _event().get("transcript_path")
     if not path:
         return 0
-    line = transcript.spoken_line(path, cfg.get("marker", transcript.DEFAULT_MARKER))
+    line = transcript.spoken_text(
+        path,
+        mode=cfg.get("speech_mode", "bookends"),
+        marker=cfg.get("marker", transcript.DEFAULT_MARKER),
+        limit=cfg.get("segment_chars", 280))
     if line:
         speak.speak(line, cfg)
     return 0
@@ -84,9 +88,13 @@ def cmd_opener(_args):
 
 
 def cmd_session_start(_args):
-    """SessionStart hook: teach the session the marker convention if enabled."""
+    """SessionStart hook: teach the marker convention only in marker mode.
+
+    In the natural modes Claude writes normally and the hook reads its prose,
+    so nothing needs to be injected.
+    """
     cfg = config.load()
-    if not cfg.get("enabled"):
+    if not cfg.get("enabled") or cfg.get("speech_mode") != "marker":
         return 0
     context = INSTRUCTION.format(marker=cfg.get("marker", transcript.DEFAULT_MARKER))
     json.dump({"hookSpecificOutput": {
@@ -98,8 +106,11 @@ def cmd_session_start(_args):
 
 def cmd_on(_args):
     cfg = config.set_enabled(True)
-    print(INSTRUCTION.format(marker=cfg.get("marker")))
-    print("\nclaude-vox is ON (backend: %s)." % cfg.get("backend"))
+    if cfg.get("speech_mode") == "marker":
+        print(INSTRUCTION.format(marker=cfg.get("marker")))
+        print()
+    print("claude-vox is ON - speaking mode '%s', backend '%s'."
+          % (cfg.get("speech_mode"), cfg.get("backend")))
     return 0
 
 
@@ -113,6 +124,7 @@ def cmd_off(_args):
 def cmd_status(_args):
     cfg = config.load()
     print("claude-vox: %s" % ("ON" if cfg.get("enabled") else "OFF"))
+    print("  mode:    %s" % cfg.get("speech_mode"))
     print("  backend: %s" % cfg.get("backend"))
     if cfg.get("backend") == "http":
         print("  url:     %s" % cfg.get("http", {}).get("url"))
