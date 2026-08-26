@@ -75,6 +75,47 @@ def _wait_for_new(path, before, wait=20.0, interval=0.2):
         time.sleep(interval)
 
 
+def _wait_for_working_intro(path, before, wait=30.0, interval=0.3):
+    """Wait for the line Claude says as it starts working, past `before`.
+
+    Polls the transcript until a first text block is followed by a tool call
+    (see transcript.first_working_intro). A text-only reply never starts a
+    tool, so this simply times out to (None, None) and the Stop summary speaks
+    instead.
+    """
+    deadline = time.monotonic() + wait
+    while True:
+        uuid, text = transcript.first_working_intro(path, before)
+        if uuid is not None:
+            return uuid, text
+        if time.monotonic() >= deadline:
+            return None, None
+        time.sleep(interval)
+
+
+def cmd_speak_intro(args):
+    """Detached worker: speak Claude's opening line the moment work begins."""
+    if not args:
+        return 0
+    path = args[0]
+    before = args[1] if len(args) > 1 and args[1] else None
+    cfg = config.load()
+    if not cfg.get("enabled"):
+        return 0
+    if cfg.get("speech_mode") != "assistant" or not cfg.get("live_intro", True):
+        return 0
+    uuid, text = _wait_for_working_intro(path, before)
+    if not text:
+        return 0
+    if uuid == _read_last_spoken():
+        return 0
+    line = transcript.speakable(text, cfg.get("segment_chars", 280))
+    if line:
+        _write_last_spoken(uuid)
+        speak.speak(line, cfg)
+    return 0
+
+
 def cmd_stop(_args):
     """Stop hook: hand speaking to a detached child that outlives the hook.
 
@@ -122,19 +163,37 @@ def cmd_speak_latest(args):
     return 0
 
 def cmd_hush(_args):
-    """UserPromptSubmit hook: cut off old speech, then acknowledge instantly.
+    """UserPromptSubmit hook: cut off old speech, then start listening for work.
 
-    The acknowledgement runs in a detached child so submitting a prompt is
-    never blocked on speech synthesis - the hook returns immediately.
+    Two detached children may be launched, both so submitting a prompt is never
+    blocked on synthesis: the optional canned opener, and - in assistant mode -
+    the live-intro watcher, which waits for Claude's first working line and
+    speaks it seconds in rather than at the end of the turn. The event is read
+    for its transcript_path so the watcher knows which file to tail and what
+    the newest message was before this turn began.
     """
     speak.stop_playback()
     cfg = config.load()
-    if cfg.get("enabled") and cfg.get("opener", {}).get("enabled"):
-        script = os.path.abspath(sys.argv[0])
-        subprocess.Popen([sys.executable, script, "speak-opener"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         stdin=subprocess.DEVNULL, start_new_session=True)
+    if not cfg.get("enabled"):
+        return 0
+    event = _event()
+    script = os.path.abspath(sys.argv[0])
+    if cfg.get("opener", {}).get("enabled"):
+        _spawn_hook(script, "speak-opener")
+    if cfg.get("speech_mode") == "assistant" and cfg.get("live_intro", True):
+        path = event.get("transcript_path")
+        if path:
+            before, _ = transcript.last_assistant_entry(path)
+            _spawn_hook(script, "speak-intro", path, before or "")
     return 0
+
+
+def _spawn_hook(script, *args):
+    """Launch a vox subcommand detached, so the hook returns without waiting."""
+    subprocess.Popen(
+        [sys.executable, script, *args],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, start_new_session=True)
 
 
 def pick_opener(cfg):
@@ -252,6 +311,7 @@ def cmd_test(args):
 COMMANDS = {
     "stop": cmd_stop,
     "speak-latest": cmd_speak_latest,
+    "speak-intro": cmd_speak_intro,
     "hush": cmd_hush,
     "opener": cmd_opener,
     "speak-opener": cmd_speak_opener,
@@ -262,7 +322,8 @@ COMMANDS = {
     "test": cmd_test,
 }
 
-HOOKS = {"stop", "speak-latest", "hush", "session-start", "speak-opener"}
+HOOKS = {"stop", "speak-latest", "speak-intro", "hush", "session-start",
+         "speak-opener"}
 
 
 def main(argv=None):
