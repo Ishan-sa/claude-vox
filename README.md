@@ -1,41 +1,50 @@
 # claude-vox
 
-Claude Code reads its own answers out loud, in its own words.
+Claude Code talks you through its work, in its own words.
 
-When a turn finishes, `claude-vox` speaks Claude's opening remark and its
-closing thought -- the natural bookends of the response -- through your
-speakers. Code blocks, file listings, and bullet points are stripped out, so
-you hear the sentences a person would actually read, not punctuation and paths.
+The moment Claude starts working on something, `claude-vox` speaks the line it
+opens with -- *"I'll dig into how the timezone dropdown is rendered"* --
+so you hear it start, not just finish. When the turn ends, it speaks a one- or
+two-sentence summary of what actually happened, written by Claude to be heard.
 
 ```
-Glad it's working, Sir -- and sorry it took that much digging. The hardware
-was fine the whole time; it was contention over /dev/hidraw and some
-inconsistent mode metadata from the controllers.
+● I'll dig into how the timezone dropdown is rendered.        <- spoken live
+     Searched for 5 patterns, ran 5 shell commands
+● Diagnosis confirmed: the API sends a display label but the
+     dropdown keys on date codes, so Radix renders blank.
+     Ran 4 shell commands
+● Done, Sir. Fixed in TimezonePicker.tsx. Root cause...
+     [ a screen of code, paths, and a verification table ]
 
-Where things stand:
-- reopens on login, survives reboot
-- fanrgb blue for scripting
-
-Whenever you want it, the two loose ends are LAN access and wiring it into
-ARIA. Both noted in memory, so just say the word.
+  🔊 Fixed the timezone dropdown, Sir -- it was matching     <- spoken at the end
+     on the wrong key, so the saved value showed blank. Verified
+     across every screen that uses it.
 ```
 
-Spoken: *"Glad it's working, Sir ... [pause] ... just say the word."* The list
-in the middle is skipped.
+Spoken, seconds apart: *"I'll dig into how the timezone dropdown is
+rendered."* ... then, at the end, *"Fixed the timezone dropdown, Sir -- it
+was matching on the wrong key, so the saved value showed blank. Verified across
+every screen that uses it."* Everything in between -- the code, the paths, the table --
+is never read aloud.
 
-## Why read Claude's own words
+## Why it works this way
 
-Most Claude Code TTS tools either read the whole response (long, full of
-punctuation nobody wants to hear) or run it back through a model to summarise
-(slow, and it can be wrong about what just happened). `claude-vox` speaks the
-prose the model already wrote -- no second model, no extra latency. It picks
-the first and last paragraphs because that is where a well-written answer opens
-and lands, and drops everything structural in between.
+Most Claude Code TTS tools read the whole response (long, and full of paths and
+punctuation nobody wants to hear aloud) or wait until the very end to say
+anything. `claude-vox` does neither. Two things make it feel like an assistant
+rather than a screen reader:
 
-There is one deliberate limit: Claude Code has **no hook that fires while a
-response streams**, so the intro cannot be spoken before Claude has written it.
-Both bookends are spoken together when the turn ends -- which reads like a
-status report rather than a running commentary.
+- **A live intro.** Claude Code has no hook that fires mid-stream, but it *does*
+  write each message to the transcript as the turn runs. So when you submit a
+  prompt, vox starts watching that file and speaks Claude's first line the
+  instant a tool call shows work has begun -- often a minute or more before the
+  turn ends. A quick reply with no tools skips the intro and is spoken once, at
+  the end.
+- **A summary, not a slice.** The closing line is Claude's own spoken summary of
+  the *whole* turn -- the important part is usually in the middle, which reading
+  the last paragraph would miss. Claude writes it on a `🔊` line, and a
+  speakable filter strips anything that would read like a terminal (`npx tsc
+  --noEmit`, `src/utils/optionKeys.ts`, `localhost:3000`) before it is voiced.
 
 ## Install
 
@@ -80,11 +89,13 @@ must never wedge a coding session.
 
 | Hook | What it does |
 |---|---|
-| `SessionStart` | If enabled, tells the session the marker convention, so it survives restarts |
-| `Stop` | Reads the transcript and speaks Claude's opening and closing lines |
-| `UserPromptSubmit` | Kills playback the instant you type again, so you can cut it off mid-sentence |
+| `SessionStart` | If enabled, asks the session to end replies with a spoken `🔊` summary line, so the convention survives restarts |
+| `UserPromptSubmit` | Kills playback the instant you type again; in assistant mode, starts the watcher that speaks Claude's first working line live |
+| `Stop` | Reads the transcript and speaks the summary once the turn ends |
 
-Subagent output is ignored -- only what you actually see on screen gets spoken.
+Both the live intro and the end-of-turn summary run in detached workers that
+outlive the hook, so submitting a prompt is never blocked on speech. Subagent
+output is ignored -- only what you actually see on screen gets spoken.
 
 ### Speaking modes
 
@@ -92,12 +103,18 @@ Subagent output is ignored -- only what you actually see on screen gets spoken.
 
 | Mode | Speaks |
 |---|---|
-| `bookends` *(default)* | The first and last paragraph, read as one line |
+| `assistant` *(default)* | Claude's live opening line as it starts working, then its own `🔊` summary of the whole turn at the end |
+| `bookends` | The first and last paragraph, read as one line |
 | `intro` | Just the opening paragraph |
 | `summary` | Just the closing paragraph |
 | `marker` | Only a line the model prefixes with the marker (below) |
 
-In any mode, if the model writes a line beginning with the `🔊` marker, that exact line is spoken instead -- an override for when you want to dictate the words precisely. `segment_chars` caps how long each paragraph may be before it is trimmed at a sentence boundary.
+`assistant` and `marker` ask the model (via `SessionStart`) to write its own
+spoken summary on a `🔊` line; the other modes read the prose as written and
+inject nothing. In every mode a `🔊` line, if present, is what gets spoken --
+an override for dictating the words precisely. In assistant mode the live intro
+can be turned off on its own with `live_intro: false`. `segment_chars` caps how
+long a spoken line may be before it is trimmed at a sentence boundary.
 
 ### The instant opener (optional, off by default)
 
@@ -248,8 +265,9 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | What `/vox on` and `/vox off` flip |
-| `speech_mode` | `bookends` | What to read: `bookends`, `intro`, `summary`, or `marker` |
-| `segment_chars` | `280` | Max length of each paragraph before it is trimmed |
+| `speech_mode` | `assistant` | What to read: `assistant`, `bookends`, `intro`, `summary`, or `marker` |
+| `live_intro` | `true` | In assistant mode, speak Claude's first working line live. Set `false` for summary-only |
+| `segment_chars` | `280` | Max length of each spoken line before it is trimmed |
 | `marker` | `🔊` | The prefix that marks the spoken line. Change it if the emoji renders badly in your terminal |
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
@@ -261,7 +279,13 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 **Nothing is spoken.** Run `/vox status` -- if it says OFF, `/vox on`. If it
 says ON, run `/vox test`: that isolates the audio path from the hook path. If
 the test is silent, the backend is wrong; if the test works but real responses
-are not spoken, the model is not writing the marker line, so re-run `/vox on`.
+are not spoken, the session started before the hooks were installed -- open a
+fresh one.
+
+**The intro never fires, only the summary.** The live intro speaks only when
+Claude uses a tool -- a quick reply with no tools is spoken once, at the end.
+It also needs a session started after install, since it rides the
+`UserPromptSubmit` hook. Turn it off entirely with `live_intro: false`.
 
 **Something says a stock phrase before every response.** That is the opener.
 It is off by default and ships with no phrases, so both were set deliberately

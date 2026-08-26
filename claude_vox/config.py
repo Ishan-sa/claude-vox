@@ -13,12 +13,17 @@ import shutil
 DEFAULTS = {
     "enabled": False,
     # What to speak from each response:
-    #   "bookends" - Claude's own first and last paragraph (default)
-    #   "intro"    - just the opening line
-    #   "summary"  - just the closing line
-    #   "marker"   - only a line the model prefixes with `marker` below
+    #   "assistant" - Claude's own spoken summary (its marker line), plus a
+    #                 live intro spoken as it starts working (default)
+    #   "bookends"  - Claude's own first and last paragraph
+    #   "intro"     - just the opening line
+    #   "summary"   - just the closing line
+    #   "marker"    - only a line the model prefixes with `marker` below
     # A marker line, when present, always overrides the mode.
-    "speech_mode": "bookends",
+    "speech_mode": "assistant",
+    # In assistant mode, speak Claude's first working line the moment a tool
+    # call shows it has started, not only the summary at the end.
+    "live_intro": True,
     "segment_chars": 280,
     "marker": "\U0001f50a",
     "backend": "command",

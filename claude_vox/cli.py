@@ -23,6 +23,33 @@ INSTRUCTION = (
     "Omit the line entirely when a response needs no announcement."
 )
 
+# Assistant mode wants a summary of the WHOLE turn, not just the last thing
+# done - the point a colleague would say out loud - written so it survives
+# being spoken, since the middle of a response is where the real news usually
+# is and bookends miss it.
+ASSISTANT_INSTRUCTION = (
+    "Voice mode (claude-vox) is ON: your replies are read aloud. End every "
+    "response with a final line beginning with the {marker} marker - one or "
+    "two natural spoken-English sentences summarising the whole response, the "
+    "part a colleague would want said out loud, not just the last step. Write "
+    "it to be heard: no code, paths, URLs, flags, filenames, markdown, or "
+    "lists. Example:\n"
+    "{marker} Fixed the timezone dropdown - it was matching on the wrong "
+    "key, so the saved value showed blank. Verified across every screen that uses it.\n"
+    "Omit the line only for a bare acknowledgement that needs nothing spoken."
+)
+
+
+def _instruction_for(cfg):
+    """The context to inject for the current mode, or None if none applies."""
+    mode = cfg.get("speech_mode")
+    marker = cfg.get("marker", transcript.DEFAULT_MARKER)
+    if mode == "assistant":
+        return ASSISTANT_INSTRUCTION.format(marker=marker)
+    if mode == "marker":
+        return INSTRUCTION.format(marker=marker)
+    return None
+
 
 def _event():
     """Decode the hook event Claude Code sends on stdin."""
@@ -251,15 +278,18 @@ def cmd_opener(args):
 
 
 def cmd_session_start(_args):
-    """SessionStart hook: teach the marker convention only in marker mode.
+    """SessionStart hook: teach the model to write its own spoken summary line.
 
-    In the natural modes Claude writes normally and the hook reads its prose,
-    so nothing needs to be injected.
+    Both assistant and marker mode ask the model for a marker line; the purely
+    extractive modes (bookends/intro/summary) read prose as written and inject
+    nothing.
     """
     cfg = config.load()
-    if not cfg.get("enabled") or cfg.get("speech_mode") != "marker":
+    if not cfg.get("enabled"):
         return 0
-    context = INSTRUCTION.format(marker=cfg.get("marker", transcript.DEFAULT_MARKER))
+    context = _instruction_for(cfg)
+    if not context:
+        return 0
     json.dump({"hookSpecificOutput": {
         "hookEventName": "SessionStart",
         "additionalContext": context,
@@ -269,8 +299,9 @@ def cmd_session_start(_args):
 
 def cmd_on(_args):
     cfg = config.set_enabled(True)
-    if cfg.get("speech_mode") == "marker":
-        print(INSTRUCTION.format(marker=cfg.get("marker")))
+    instruction = _instruction_for(cfg)
+    if instruction:
+        print(instruction)
         print()
     print("claude-vox is ON - speaking mode '%s', backend '%s'."
           % (cfg.get("speech_mode"), cfg.get("backend")))
@@ -288,6 +319,9 @@ def cmd_status(_args):
     cfg = config.load()
     print("claude-vox: %s" % ("ON" if cfg.get("enabled") else "OFF"))
     print("  mode:    %s" % cfg.get("speech_mode"))
+    if cfg.get("speech_mode") == "assistant":
+        print("  intro:   %s (live)" % ("on" if cfg.get("live_intro", True)
+                                        else "off"))
     print("  backend: %s" % cfg.get("backend"))
     if cfg.get("backend") == "http":
         print("  url:     %s" % cfg.get("http", {}).get("url"))
