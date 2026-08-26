@@ -73,8 +73,12 @@ def _fill(template, **values):
     return filled
 
 
-def speak(text, cfg=None):
+def speak(text, cfg=None, cache=False):
     """Speak text using the configured backend.
+
+    When cache is True the synthesised audio is kept and replayed on the next
+    identical line - used for the short, repeated opener phrases so they play
+    the instant a prompt is submitted instead of waiting on synthesis.
 
     Returns True if playback started. Every failure is reported as False rather
     than raised - a hook must never break the session over a missing speaker.
@@ -90,7 +94,7 @@ def speak(text, cfg=None):
     stop_playback()  # a new line replaces the old one rather than overlapping
     try:
         if cfg.get("backend") == "http":
-            return _speak_http(text, cfg)
+            return _speak_http(text, cfg, cache)
         return _speak_command(text, cfg)
     except Exception:
         return False
@@ -104,10 +108,17 @@ def _speak_command(text, cfg):
     return True
 
 
-def _speak_http(text, cfg):
+def _speak_http(text, cfg, cache=False):
     import urllib.request
 
     http = cfg.get("http", {})
+    if cache:
+        cached = cache_path(text, cfg)
+        if os.path.exists(cached):
+            play = http.get("play_command")
+            if play:
+                _spawn(_fill(play, audio=cached))
+                return True
     body = json.dumps(_inject(http.get("body", {}), text)).encode("utf-8")
     request = urllib.request.Request(
         http["url"], data=body, headers=http.get("headers", {}))
@@ -126,16 +137,34 @@ def _speak_http(text, cfg):
             payload = audio_response.read()
     if not payload:
         return False
-    handle, audio = tempfile.mkstemp(prefix="vox-", suffix=".mp3")
-    with os.fdopen(handle, "wb") as fh:
-        fh.write(payload)
-    _sweep_temp()
+    if cache:
+        audio = cache_path(text, cfg)
+        os.makedirs(os.path.dirname(audio), exist_ok=True)
+        with open(audio, "wb") as fh:
+            fh.write(payload)
+    else:
+        handle, audio = tempfile.mkstemp(prefix="vox-", suffix=".mp3")
+        with os.fdopen(handle, "wb") as fh:
+            fh.write(payload)
+        _sweep_temp()
 
     play = http.get("play_command")
     if not play:
         return False
     _spawn(_fill(play, audio=audio))
     return True
+
+
+def cache_path(text, cfg):
+    """Stable on-disk path for the audio of text under the current voice.
+
+    Keyed on text and the request body (which carries the voice) so changing
+    the voice re-renders rather than replaying the old one.
+    """
+    import hashlib
+    voice_key = json.dumps(cfg.get("http", {}).get("body", {}), sort_keys=True)
+    digest = hashlib.sha1((voice_key + "\x00" + text).encode("utf-8")).hexdigest()
+    return os.path.join(config.home(), "openers", digest + ".mp3")
 
 
 def rewrite_host(url, endpoint):
