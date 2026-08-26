@@ -64,7 +64,8 @@ Then, in a fresh session, turn it on:
 ```
 
 `/vox off` to stop, `/vox status` to see what is configured, `/vox test` to
-hear a line right now without enabling anything.
+hear a line right now without enabling anything, `/vox opener off` to silence
+the instant acknowledgement while leaving the rest speaking.
 
 The voice you get out of the box is whatever your OS ships -- clear enough, but
 plainly synthetic. For a neural one, see [a better voice](#a-better-voice)
@@ -245,7 +246,7 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | `marker` | `🔊` | The prefix that marks the spoken line. Change it if the emoji renders badly in your terminal |
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
-| `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted |
+| `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted. `/vox opener on\|off` flips it; `/vox status` shows it |
 | `opener.phrases` | *(list)* | The lines to rotate through; synthesised once, then cached |
 
 ## Troubleshooting
@@ -254,6 +255,10 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 says ON, run `/vox test`: that isolates the audio path from the hook path. If
 the test is silent, the backend is wrong; if the test works but real responses
 are not spoken, the model is not writing the marker line, so re-run `/vox on`.
+
+**It says "one moment" before every response.** That is the opener, and it is
+off by default -- something turned it on. `/vox opener off` silences it without
+touching anything else, and `/vox status` shows where it stands.
 
 **It speaks but the hooks never fire.** Hooks are read at startup -- restart
 Claude Code after installing.

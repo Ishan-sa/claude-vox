@@ -131,7 +131,7 @@ def cmd_hush(_args):
     cfg = config.load()
     if cfg.get("enabled") and cfg.get("opener", {}).get("enabled"):
         script = os.path.abspath(sys.argv[0])
-        subprocess.Popen([sys.executable, script, "opener"],
+        subprocess.Popen([sys.executable, script, "speak-opener"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          stdin=subprocess.DEVNULL, start_new_session=True)
     return 0
@@ -148,7 +148,7 @@ def pick_opener(cfg):
     return random.choice(phrases)
 
 
-def cmd_opener(_args):
+def cmd_speak_opener(_args):
     """Speak a cached opener line. Invoked detached by the hush hook."""
     cfg = config.load()
     if not cfg.get("enabled"):
@@ -156,6 +156,32 @@ def cmd_opener(_args):
     phrase = pick_opener(cfg)
     if phrase:
         speak.speak(phrase, cfg, cache=True)
+    return 0
+
+
+def cmd_opener(args):
+    """Turn the instant opener on or off, or report where it stands.
+
+    It lives behind its own switch because it is the one part of vox that
+    speaks without having anything to say -- welcome when you want to know the
+    turn started, grating when you do not. Hand-editing config.json to silence
+    it is a bad answer, and worse, `vox status` used to not even mention it, so
+    a phrase you did not remember enabling looked like the tool misbehaving.
+    """
+    setting = (args[0] if args else "").lower()
+    if setting in ("on", "off"):
+        cfg = config.set_opener_enabled(setting == "on")
+    elif setting:
+        print("usage: vox opener [on|off]", file=sys.stderr)
+        return 2
+    else:
+        cfg = config.load()
+    opener = cfg.get("opener", {})
+    if opener.get("enabled"):
+        print("opener is ON - one of %d phrases is spoken the moment you "
+              "submit a prompt." % len(opener.get("phrases") or []))
+    else:
+        print("opener is OFF - nothing is spoken until the turn finishes.")
     return 0
 
 
@@ -202,6 +228,8 @@ def cmd_status(_args):
         print("  url:     %s" % cfg.get("http", {}).get("url"))
     else:
         print("  argv:    %s" % " ".join(cfg.get("command", {}).get("argv", [])))
+    print("  opener:  %s" % ("on" if cfg.get("opener", {}).get("enabled")
+                                else "off"))
     print("  marker:  %s" % cfg.get("marker"))
     print("  config:  %s" % config.config_path())
     return 0
@@ -220,6 +248,7 @@ COMMANDS = {
     "speak-latest": cmd_speak_latest,
     "hush": cmd_hush,
     "opener": cmd_opener,
+    "speak-opener": cmd_speak_opener,
     "session-start": cmd_session_start,
     "on": cmd_on,
     "off": cmd_off,
@@ -227,7 +256,7 @@ COMMANDS = {
     "test": cmd_test,
 }
 
-HOOKS = {"stop", "speak-latest", "hush", "session-start", "opener"}
+HOOKS = {"stop", "speak-latest", "hush", "session-start", "speak-opener"}
 
 
 def main(argv=None):

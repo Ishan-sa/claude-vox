@@ -108,6 +108,14 @@ def set_enabled(value):
     return cfg
 
 
+def set_opener_enabled(value):
+    """Flip the instant opener without disturbing the phrase list."""
+    cfg = load()
+    cfg.setdefault("opener", {})["enabled"] = bool(value)
+    save(cfg)
+    return cfg
+
+
 def detect_backend():
     """Pick the best backend available on this machine.
 

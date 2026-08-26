@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import sys
 import tempfile
@@ -59,6 +61,73 @@ class CachePath(unittest.TestCase):
         self.assertEqual(os.path.dirname(path),
                          os.path.join(self.dir, "openers"))
         self.assertTrue(path.endswith(".mp3"))
+
+
+class OpenerToggle(unittest.TestCase):
+    """`vox opener on|off` -- the switch that used to require editing JSON."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self._saved = os.environ.get("CLAUDE_VOX_HOME")
+        os.environ["CLAUDE_VOX_HOME"] = self.dir
+
+    def tearDown(self):
+        if self._saved is None:
+            os.environ.pop("CLAUDE_VOX_HOME", None)
+        else:
+            os.environ["CLAUDE_VOX_HOME"] = self._saved
+
+    def _run(self, *args):
+        out = io.StringIO()
+        # stderr too, so the usage-error case does not litter the test run.
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.cmd_opener(list(args))
+        return code, out.getvalue()
+
+    def test_on_then_off_round_trips(self):
+        self._run("on")
+        self.assertTrue(config.load()["opener"]["enabled"])
+        self._run("off")
+        self.assertFalse(config.load()["opener"]["enabled"])
+
+    def test_off_keeps_the_phrase_list_for_later(self):
+        self._run("on")
+        self._run("off")
+        self.assertTrue(config.load()["opener"]["phrases"])
+
+    def test_with_no_argument_it_only_reports(self):
+        config.set_opener_enabled(True)
+        code, out = self._run()
+        self.assertEqual(code, 0)
+        self.assertIn("ON", out)
+        self.assertTrue(config.load()["opener"]["enabled"], "must not toggle")
+
+    def test_a_bad_argument_changes_nothing(self):
+        config.set_opener_enabled(True)
+        code, _ = self._run("maybe")
+        self.assertEqual(code, 2)
+        self.assertTrue(config.load()["opener"]["enabled"])
+
+    def test_status_reports_the_opener_so_it_is_never_a_mystery_voice(self):
+        config.set_opener_enabled(True)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.cmd_status([])
+        self.assertIn("opener:", out.getvalue())
+        self.assertIn("on", out.getvalue())
+
+
+class OpenerWiring(unittest.TestCase):
+    def test_the_hush_hook_worker_is_registered_and_treated_as_a_hook(self):
+        # Renamed out of the way so plain `opener` could become the toggle;
+        # both halves have to stay wired or the opener silently stops working.
+        self.assertIn("speak-opener", cli.COMMANDS)
+        self.assertIn("speak-opener", cli.HOOKS)
+        self.assertIs(cli.COMMANDS["speak-opener"], cli.cmd_speak_opener)
+
+    def test_the_toggle_is_not_treated_as_a_hook(self):
+        # Hooks swallow errors and exit 0; a user-facing command must not.
+        self.assertNotIn("opener", cli.HOOKS)
 
 
 class OpenerDefaults(unittest.TestCase):
