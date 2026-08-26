@@ -90,9 +90,87 @@ def clean(text):
     return text.strip(" -:\t")
 
 
+_BULLET = re.compile(r"^\s*([-*+]|\d+[.)]|#{1,6}\s)")
+_SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+
+
+def prose_paragraphs(text):
+    """Return the response's prose paragraphs, dropping code and structure.
+
+    Fenced code blocks, bullet/numbered lists, and one-line headers ("Where
+    things stand:") are removed, so what's left is the sentences a person would
+    actually read aloud - the opening remark and the closing thought.
+    """
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    out = []
+    for block in re.split(r"\n\s*\n", text):
+        lines = [ln for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        if all(_BULLET.match(ln) for ln in lines):      # a list block
+            continue
+        if len(lines) == 1 and lines[0].rstrip().endswith(":"):  # a header
+            continue
+        cleaned = clean(block)
+        if cleaned:
+            out.append(cleaned)
+    return out
+
+
+def cap(text, limit):
+    """Trim text to limit characters, preferring a sentence then word boundary."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    ends = list(_SENTENCE_END.finditer(window))
+    if ends and ends[-1].end() > limit * 0.4:
+        return window[:ends[-1].end()].strip()
+    return window.rsplit(" ", 1)[0].strip() + "..."
+
+
+def natural_segments(text, limit=280):
+    """(intro, summary): the first and last prose paragraphs, each capped."""
+    paras = prose_paragraphs(text)
+    if not paras:
+        return None, None
+    return cap(paras[0], limit), cap(paras[-1], limit)
+
+
+def spoken_from_response(text, mode="bookends", marker=DEFAULT_MARKER, limit=280):
+    """Decide what to speak from one response.
+
+    An explicit marker line always wins - it is the model deliberately choosing
+    the spoken words. Otherwise the mode selects from the natural prose:
+    "intro", "summary", or "bookends" (intro then summary, read as one line).
+    """
+    marked = extract_marked_line(text, marker)
+    if marked:
+        return marked
+    if mode == "marker":
+        return None
+    intro, summary = natural_segments(text, limit)
+    if mode == "intro":
+        return intro
+    if mode == "summary":
+        return summary
+    # bookends
+    if intro and summary and intro != summary:
+        return intro + " ... " + summary
+    return intro or summary
+
+
 def spoken_line(path, marker=DEFAULT_MARKER):
-    """Full pipeline: transcript path -> text to speak, or None to stay silent."""
+    """Marker-only pipeline (kept for callers that want just the marker line)."""
     text = last_assistant_text(path)
     if text is None:
         return None
     return extract_marked_line(text, marker)
+
+
+def spoken_text(path, mode="bookends", marker=DEFAULT_MARKER, limit=280):
+    """Full pipeline: transcript path -> text to speak for the given mode."""
+    text = last_assistant_text(path)
+    if text is None:
+        return None
+    return spoken_from_response(text, mode, marker, limit)
