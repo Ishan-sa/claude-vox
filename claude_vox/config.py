@@ -34,6 +34,20 @@ DEFAULTS = {
         # {text} is replaced with the spoken line.
         "argv": ["espeak-ng", "{text}"],
     },
+    # A short line spoken the instant a prompt is submitted, so there is voice
+    # feedback while the turn runs rather than only at the end. Phrases are
+    # cached after first synthesis so they play with no delay.
+    "opener": {
+        "enabled": True,
+        "phrases": [
+            "On it, Sir.",
+            "Right away, Sir.",
+            "Looking into it.",
+            "One moment.",
+            "Working on it.",
+            "Let me take a look.",
+        ],
+    },
 }
 
 

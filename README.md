@@ -72,6 +72,22 @@ must never wedge a coding session.
 
 Subagent output is ignored -- only what you actually see on screen gets spoken.
 
+### The opener
+
+To feel connected rather than only hearing a verdict at the end, `claude-vox`
+speaks a short line the instant you submit a prompt -- "On it, Sir." -- while
+the turn runs. These phrases are synthesised once and cached, so from the
+second time on they play with no delay and never hold up your prompt.
+
+Claude Code has no hook that fires mid-response, so the opener is a fixed
+rotating phrase, not the model's own first words -- the content-aware line is
+still the `🔊` summary at the end. Edit or disable the openers in config:
+
+```json
+{ "opener": { "enabled": true, "phrases": ["On it, Sir.", "Working on it."] } }
+```
+
+
 ## Configuration
 
 `~/.claude/vox/config.json`. Two backends cover essentially any setup.
@@ -162,6 +178,8 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | `marker` | `🔊` | The prefix that marks the spoken line. Change it if the emoji renders badly in your terminal |
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
+| `opener.enabled` | `true` | Speak a short line the moment a prompt is submitted |
+| `opener.phrases` | *(list)* | The lines to rotate through; synthesised once, then cached |
 
 ## Troubleshooting
 

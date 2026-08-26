@@ -5,6 +5,9 @@ hook that fails loudly would wedge the session it is decorating.
 """
 
 import json
+import os
+import random
+import subprocess
 import sys
 
 from . import config, speak, transcript
@@ -43,8 +46,40 @@ def cmd_stop(_args):
 
 
 def cmd_hush(_args):
-    """UserPromptSubmit hook: cut speech off the moment the user speaks."""
+    """UserPromptSubmit hook: cut off old speech, then acknowledge instantly.
+
+    The acknowledgement runs in a detached child so submitting a prompt is
+    never blocked on speech synthesis - the hook returns immediately.
+    """
     speak.stop_playback()
+    cfg = config.load()
+    if cfg.get("enabled") and cfg.get("opener", {}).get("enabled"):
+        script = os.path.abspath(sys.argv[0])
+        subprocess.Popen([sys.executable, script, "opener"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         stdin=subprocess.DEVNULL, start_new_session=True)
+    return 0
+
+
+def pick_opener(cfg):
+    """Choose an opener phrase, or None if openers are off / unset."""
+    opener = cfg.get("opener", {})
+    if not opener.get("enabled"):
+        return None
+    phrases = opener.get("phrases") or []
+    if not phrases:
+        return None
+    return random.choice(phrases)
+
+
+def cmd_opener(_args):
+    """Speak a cached opener line. Invoked detached by the hush hook."""
+    cfg = config.load()
+    if not cfg.get("enabled"):
+        return 0
+    phrase = pick_opener(cfg)
+    if phrase:
+        speak.speak(phrase, cfg, cache=True)
     return 0
 
 
@@ -99,6 +134,7 @@ def cmd_test(args):
 COMMANDS = {
     "stop": cmd_stop,
     "hush": cmd_hush,
+    "opener": cmd_opener,
     "session-start": cmd_session_start,
     "on": cmd_on,
     "off": cmd_off,
@@ -106,7 +142,7 @@ COMMANDS = {
     "test": cmd_test,
 }
 
-HOOKS = {"stop", "hush", "session-start"}
+HOOKS = {"stop", "hush", "session-start", "opener"}
 
 
 def main(argv=None):
