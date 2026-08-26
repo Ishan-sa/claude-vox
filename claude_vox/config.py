@@ -18,7 +18,9 @@ DEFAULTS = {
     "timeout": 8,
     "http": {
         "url": "http://127.0.0.1:5050/speak",
-        "body": {"text": "{text}"},
+        # A male British voice for the Jarvis feel. Any key the server accepts
+        # can live in the body; harmless if the server ignores "voice".
+        "body": {"text": "{text}", "voice": "en-GB-RyanNeural"},
         "headers": {"Content-Type": "application/json"},
         # Field in the JSON reply holding a playable URL. Set to null when the
         # server returns raw audio bytes instead (e.g. OpenAI /v1/audio/speech).

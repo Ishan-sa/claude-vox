@@ -140,6 +140,20 @@ that mimics it:
 }
 ```
 
+### Choosing a voice
+
+With the `http` backend, whatever your TTS server accepts goes in `body`. The
+default is a male British voice, `en-GB-RyanNeural`. Swap it for any voice your
+server supports:
+
+```json
+{ "backend": "http", "http": { "body": { "text": "{text}", "voice": "en-US-GuyNeural" } } }
+```
+
+Some Jarvis-adjacent Edge TTS voices: `en-GB-RyanNeural` and `en-GB-ThomasNeural`
+(British male), `en-US-GuyNeural` and `en-US-ChristopherNeural` (US male). With
+the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel", "{text}"]`.
+
 ### Other settings
 
 | Key | Default | Meaning |
