@@ -64,7 +64,12 @@ Then, in a fresh session, turn it on:
 ```
 
 `/vox off` to stop, `/vox status` to see what is configured, `/vox test` to
-hear a line right now without enabling anything.
+hear a line right now without enabling anything, `/vox opener off` to silence
+the instant acknowledgement while leaving the rest speaking.
+
+The voice you get out of the box is whatever your OS ships -- clear enough, but
+plainly synthetic. For a neural one, see [a better voice](#a-better-voice)
+below; it is one extra command and still needs no API key.
 
 To remove it: `./uninstall.sh` (add `--purge` to delete the config too).
 
@@ -97,15 +102,62 @@ In any mode, if the model writes a line beginning with the `🔊` marker, that e
 ### The instant opener (optional, off by default)
 
 If you also want a sound the *instant* you hit enter -- before Claude has
-written anything -- turn on the opener. It speaks a short rotating phrase
-("On it, Sir.") from a cache, so it plays with no delay and never holds up your
-prompt. It is off by default because the intro paragraph already gives a
-content-aware opening; enable it only if you want that extra immediate ack.
+written anything -- turn on the opener. It speaks a short phrase from a cache,
+so it plays with no delay and never holds up your prompt. It is off by default
+because the intro paragraph already gives a content-aware opening; enable it
+only if you want that extra immediate ack.
+
+**No phrases ship with it.** Whatever it says, you wrote -- a stock line you did
+not choose, announcing every single turn, wears out fast, and tracking down
+where it came from is worse. Give it words and it speaks; leave it empty and it
+stays quiet whatever the switch says.
 
 ```json
-{ "opener": { "enabled": true, "phrases": ["On it, Sir.", "Working on it."] } }
+{ "opener": { "enabled": true, "phrases": ["On it.", "Working on it."] } }
 ```
 
+`/vox opener on` and `/vox opener off` flip it without opening the file.
+
+
+## A better voice
+
+The stock voices are the ones your operating system already had. They are
+intelligible and they are free, and after an hour of listening to one narrate
+your work you will want something else.
+
+```bash
+./setup-edge-tts.sh                      # en-GB-RyanNeural, a British male
+./setup-edge-tts.sh en-US-GuyNeural      # or name any voice you like
+./setup-edge-tts.sh --opener             # and pre-render your opener phrases
+```
+
+This reaches Microsoft's neural voices through `edge-tts`. No API key, no
+account, no per-word billing. It is the only dependency this project has, and
+it goes into its own virtualenv under `~/.claude/vox/venv`, so nothing lands on
+your system Python. `--list-voices` on that venv's `edge-tts` prints the
+several hundred voices available.
+
+It stays out of the way of the two things that actually matter in a hook:
+
+**It is never the reason a turn goes quiet.** If the network is down, or
+Microsoft is having a bad afternoon, or you deleted the venv, it speaks the
+line through the offline OS voice instead. Worse audio beats no audio when the
+point is to tell you something finished.
+
+**It does not make you wait to be acknowledged.** Neural synthesis is a network
+round-trip, which is fine at the end of a turn and far too slow for the opener
+that fires the instant you press enter. So short lines are cached on disk by
+voice, prosody and text: the setup script pre-renders your opener phrases, and
+from then on they play immediately. Long lines are spoken once and never
+repeated, so they are not worth caching and are cleaned up after playback.
+
+Three environment variables tune it, should you want to:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `VOX_RATE` | `-4%` | Speaking rate. Slightly slow reads as composed rather than chirpy |
+| `VOX_PITCH` | `-4Hz` | Pitch shift. Slightly low puts some chest behind it |
+| `VOX_FALLBACK_VOICE` | `Daniel` | The offline voice used when synthesis fails |
 
 ## Configuration
 
@@ -124,7 +176,9 @@ The default on most machines. The installer picks whichever of `say`,
 ```
 
 `{text}` is replaced with the line to speak. Anything that synthesises from
-argv works -- including Piper:
+argv works. `setup-edge-tts.sh` above is exactly this: it points `argv` at
+`backends/edge-tts.sh`, which synthesises, plays, and caches. Piper works the
+same way:
 
 ```json
 {
@@ -199,8 +253,8 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | `marker` | `🔊` | The prefix that marks the spoken line. Change it if the emoji renders badly in your terminal |
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
-| `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted |
-| `opener.phrases` | *(list)* | The lines to rotate through; synthesised once, then cached |
+| `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted. `/vox opener on\|off` flips it; `/vox status` shows it |
+| `opener.phrases` | *(empty)* | Your lines to rotate through; synthesised once, then cached. Nothing canned ships -- empty means silent |
 
 ## Troubleshooting
 
@@ -208,6 +262,11 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 says ON, run `/vox test`: that isolates the audio path from the hook path. If
 the test is silent, the backend is wrong; if the test works but real responses
 are not spoken, the model is not writing the marker line, so re-run `/vox on`.
+
+**Something says a stock phrase before every response.** That is the opener.
+It is off by default and ships with no phrases, so both were set deliberately
+at some point. `/vox opener off` silences it without touching anything else,
+and `/vox status` shows where it stands.
 
 **It speaks but the hooks never fire.** Hooks are read at startup -- restart
 Claude Code after installing.

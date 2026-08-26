@@ -45,16 +45,14 @@ DEFAULTS = {
     # A short line spoken the instant a prompt is submitted, so there is voice
     # feedback while the turn runs rather than only at the end. Phrases are
     # cached after first synthesis so they play with no delay.
+    #
+    # Nothing canned ships here on purpose. A stock phrase you did not choose,
+    # announcing every turn in someone else's words, is the first thing anyone
+    # wants gone -- and hunting down where "One moment." came from is a bad
+    # introduction to a tool. Write your own or leave it silent.
     "opener": {
         "enabled": False,
-        "phrases": [
-            "On it, Sir.",
-            "Right away, Sir.",
-            "Looking into it.",
-            "One moment.",
-            "Working on it.",
-            "Let me take a look.",
-        ],
+        "phrases": [],
     },
 }
 
@@ -104,6 +102,14 @@ def save(cfg):
 def set_enabled(value):
     cfg = load()
     cfg["enabled"] = bool(value)
+    save(cfg)
+    return cfg
+
+
+def set_opener_enabled(value):
+    """Flip the instant opener without disturbing the phrase list."""
+    cfg = load()
+    cfg.setdefault("opener", {})["enabled"] = bool(value)
     save(cfg)
     return cfg
 
