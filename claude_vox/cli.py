@@ -9,6 +9,7 @@ import os
 import random
 import subprocess
 import sys
+import time
 
 from . import config, speak, transcript
 
@@ -31,6 +32,51 @@ def _event():
         return {}
 
 
+LAST_SPOKEN = "last_spoken"
+
+
+def _last_spoken_path():
+    return os.path.join(config.home(), LAST_SPOKEN)
+
+
+def _read_last_spoken():
+    try:
+        with open(_last_spoken_path(), "r", encoding="utf-8") as fh:
+            return fh.read().strip() or None
+    except (IOError, OSError):
+        return None
+
+
+def _write_last_spoken(uuid):
+    try:
+        os.makedirs(config.home(), exist_ok=True)
+        with open(_last_spoken_path(), "w", encoding="utf-8") as fh:
+            fh.write(uuid or "")
+    except (IOError, OSError):
+        pass
+
+
+def _fresh_entry(path, already_spoken, wait=2.0, interval=0.1):
+    """Return (uuid, text) of a response we have not spoken yet.
+
+    The Stop hook can fire before Claude Code has flushed the response that
+    triggered it. The newest entry on disk is then still the previous turn's,
+    and speaking it puts the voice permanently one reply behind. So if the
+    newest entry is the one we already spoke, give the file a moment to gain a
+    newer one, and stay silent rather than repeat ourselves if it never does.
+    """
+    uuid, text = transcript.last_assistant_entry(path)
+    if already_spoken is None or uuid != already_spoken:
+        return uuid, text
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        uuid, text = transcript.last_assistant_entry(path)
+        if uuid != already_spoken:
+            return uuid, text
+    return None, None
+
+
 def cmd_stop(_args):
     """Stop hook: speak Claude's own words from the response just finished."""
     cfg = config.load()
@@ -39,12 +85,16 @@ def cmd_stop(_args):
     path = _event().get("transcript_path")
     if not path:
         return 0
-    line = transcript.spoken_text(
-        path,
+    uuid, text = _fresh_entry(path, _read_last_spoken())
+    if text is None:
+        return 0
+    line = transcript.spoken_from_response(
+        text,
         mode=cfg.get("speech_mode", "bookends"),
         marker=cfg.get("marker", transcript.DEFAULT_MARKER),
         limit=cfg.get("segment_chars", 280))
     if line:
+        _write_last_spoken(uuid)
         speak.speak(line, cfg)
     return 0
 

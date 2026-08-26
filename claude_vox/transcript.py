@@ -33,11 +33,13 @@ def iter_entries(path):
                 continue
 
 
-def last_assistant_text(path):
-    """Return the most recent main-agent assistant text block, or None.
+def last_assistant_entry(path):
+    """Return (uuid, text) for the most recent main-agent assistant text block.
 
-    Sidechain entries are subagent output and are deliberately ignored - only
-    what the user actually sees on screen should be spoken.
+    The uuid says which response the text belongs to, so a caller can tell a
+    freshly written entry from one it has already handled. Sidechain entries
+    are subagent output and are deliberately ignored - only what the user
+    actually sees on screen should be spoken.
     """
     entries = [e for e in iter_entries(path)
                if e.get("type") == "assistant" and not e.get("isSidechain")]
@@ -49,8 +51,13 @@ def last_assistant_text(path):
             if block.get("type") == "text":
                 text = (block.get("text") or "").strip()
                 if text:
-                    return text
-    return None
+                    return entry.get("uuid"), text
+    return None, None
+
+
+def last_assistant_text(path):
+    """Return the most recent main-agent assistant text block, or None."""
+    return last_assistant_entry(path)[1]
 
 
 def extract_marked_line(text, marker=DEFAULT_MARKER):
