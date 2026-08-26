@@ -1,32 +1,41 @@
 # claude-vox
 
-Claude Code speaks its own summaries out loud.
+Claude Code reads its own answers out loud, in its own words.
 
-Every response ends with one short spoken line, and only that line is read
-through your speakers. No screen-reading, no listening to code blocks and file
-paths, no LLM round-trip to summarise after the fact -- the summary is written
-by the model as part of the answer, and you can see on screen exactly what is
-about to be said.
+When a turn finishes, `claude-vox` speaks Claude's opening remark and its
+closing thought -- the natural bookends of the response -- through your
+speakers. Code blocks, file listings, and bullet points are stripped out, so
+you hear the sentences a person would actually read, not punctuation and paths.
 
 ```
-Fixed the race in the session cache -- it was a missing lock around the
-eviction path, not the TTL logic. Tests pass.
+Glad it's working, Sir -- and sorry it took that much digging. The hardware
+was fine the whole time; it was contention over /dev/hidraw and some
+inconsistent mode metadata from the controllers.
 
-🔊 Fixed the session cache race and all the tests pass.
+Where things stand:
+- reopens on login, survives reboot
+- fanrgb blue for scripting
+
+Whenever you want it, the two loose ends are LAN access and wiring it into
+ARIA. Both noted in memory, so just say the word.
 ```
 
-Only the last line is spoken.
+Spoken: *"Glad it's working, Sir ... [pause] ... just say the word."* The list
+in the middle is skipped.
 
-## Why the marker, and not a summariser
+## Why read Claude's own words
 
 Most Claude Code TTS tools either read the whole response (long, full of
-punctuation nobody wants to hear) or run the response back through a model to
-summarise it (slow, and it can be wrong about what just happened). Here the
-author of the summary is the agent that did the work, at the moment it has the
-full context. It costs one sentence per turn and zero extra latency.
+punctuation nobody wants to hear) or run it back through a model to summarise
+(slow, and it can be wrong about what just happened). `claude-vox` speaks the
+prose the model already wrote -- no second model, no extra latency. It picks
+the first and last paragraphs because that is where a well-written answer opens
+and lands, and drops everything structural in between.
 
-If a response has no marker line, **nothing is spoken.** Silence is the
-default, so it never reads something awkward aloud.
+There is one deliberate limit: Claude Code has **no hook that fires while a
+response streams**, so the intro cannot be spoken before Claude has written it.
+Both bookends are spoken together when the turn ends -- which reads like a
+status report rather than a running commentary.
 
 ## Install
 
@@ -67,21 +76,31 @@ must never wedge a coding session.
 | Hook | What it does |
 |---|---|
 | `SessionStart` | If enabled, tells the session the marker convention, so it survives restarts |
-| `Stop` | Reads the transcript, pulls the marker line out of the response just finished, speaks it |
+| `Stop` | Reads the transcript and speaks Claude's opening and closing lines |
 | `UserPromptSubmit` | Kills playback the instant you type again, so you can cut it off mid-sentence |
 
 Subagent output is ignored -- only what you actually see on screen gets spoken.
 
-### The opener
+### Speaking modes
 
-To feel connected rather than only hearing a verdict at the end, `claude-vox`
-speaks a short line the instant you submit a prompt -- "On it, Sir." -- while
-the turn runs. These phrases are synthesised once and cached, so from the
-second time on they play with no delay and never hold up your prompt.
+`speech_mode` in config chooses what to read:
 
-Claude Code has no hook that fires mid-response, so the opener is a fixed
-rotating phrase, not the model's own first words -- the content-aware line is
-still the `🔊` summary at the end. Edit or disable the openers in config:
+| Mode | Speaks |
+|---|---|
+| `bookends` *(default)* | The first and last paragraph, read as one line |
+| `intro` | Just the opening paragraph |
+| `summary` | Just the closing paragraph |
+| `marker` | Only a line the model prefixes with the marker (below) |
+
+In any mode, if the model writes a line beginning with the `🔊` marker, that exact line is spoken instead -- an override for when you want to dictate the words precisely. `segment_chars` caps how long each paragraph may be before it is trimmed at a sentence boundary.
+
+### The instant opener (optional, off by default)
+
+If you also want a sound the *instant* you hit enter -- before Claude has
+written anything -- turn on the opener. It speaks a short rotating phrase
+("On it, Sir.") from a cache, so it plays with no delay and never holds up your
+prompt. It is off by default because the intro paragraph already gives a
+content-aware opening; enable it only if you want that extra immediate ack.
 
 ```json
 { "opener": { "enabled": true, "phrases": ["On it, Sir.", "Working on it."] } }
@@ -175,10 +194,12 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | What `/vox on` and `/vox off` flip |
+| `speech_mode` | `bookends` | What to read: `bookends`, `intro`, `summary`, or `marker` |
+| `segment_chars` | `280` | Max length of each paragraph before it is trimmed |
 | `marker` | `🔊` | The prefix that marks the spoken line. Change it if the emoji renders badly in your terminal |
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
-| `opener.enabled` | `true` | Speak a short line the moment a prompt is submitted |
+| `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted |
 | `opener.phrases` | *(list)* | The lines to rotate through; synthesised once, then cached |
 
 ## Troubleshooting
