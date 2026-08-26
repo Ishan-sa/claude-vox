@@ -283,7 +283,12 @@ def cmd_session_start(_args):
     Both assistant and marker mode ask the model for a marker line; the purely
     extractive modes (bookends/intro/summary) read prose as written and inject
     nothing.
+
+    This is also where a plugin install gets its config: there is no install
+    script to run backend detection, so the first session writes a tuned config
+    if none exists. bootstrap() is a no-op once the file is there.
     """
+    config.bootstrap()
     cfg = config.load()
     if not cfg.get("enabled"):
         return 0
