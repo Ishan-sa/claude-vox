@@ -56,37 +56,60 @@ def _write_last_spoken(uuid):
         pass
 
 
-def _fresh_entry(path, already_spoken, wait=2.0, interval=0.1):
-    """Return (uuid, text) of a response we have not spoken yet.
+def _wait_for_new(path, before, wait=20.0, interval=0.2):
+    """Wait until the transcript gains an assistant message newer than `before`.
 
-    The Stop hook can fire before Claude Code has flushed the response that
-    triggered it. The newest entry on disk is then still the previous turn's,
-    and speaking it puts the voice permanently one reply behind. So if the
-    newest entry is the one we already spoke, give the file a moment to gain a
-    newer one, and stay silent rather than repeat ourselves if it never does.
+    `before` is the newest uuid at the moment the Stop hook fired. Claude Code
+    writes the finished response to the transcript AFTER the hook returns, so a
+    caller inside the hook never sees it - only a process that outlives the
+    hook does. This waits for that write, then returns it. `before` may be None
+    on the first turn of a session, in which case any first message counts.
     """
-    uuid, text = transcript.last_assistant_entry(path)
-    if already_spoken is None or uuid != already_spoken:
-        return uuid, text
     deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
-        time.sleep(interval)
+    while True:
         uuid, text = transcript.last_assistant_entry(path)
-        if uuid != already_spoken:
+        if uuid is not None and uuid != before:
             return uuid, text
-    return None, None
+        if time.monotonic() >= deadline:
+            return None, None
+        time.sleep(interval)
 
 
 def cmd_stop(_args):
-    """Stop hook: speak Claude's own words from the response just finished."""
+    """Stop hook: hand speaking to a detached child that outlives the hook.
+
+    Capturing the newest uuid now, before the finished message is flushed,
+    gives the child a baseline: it speaks the next message that appears past
+    that point, which is the response this hook belongs to.
+    """
     cfg = config.load()
     if not cfg.get("enabled"):
         return 0
     path = _event().get("transcript_path")
     if not path:
         return 0
-    uuid, text = _fresh_entry(path, _read_last_spoken())
+    before, _ = transcript.last_assistant_entry(path)
+    script = os.path.abspath(sys.argv[0])
+    subprocess.Popen(
+        [sys.executable, script, "speak-latest", path, before or ""],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, start_new_session=True)
+    return 0
+
+
+def cmd_speak_latest(args):
+    """Detached worker: wait for the finished response, then speak it once."""
+    if not args:
+        return 0
+    path = args[0]
+    before = args[1] if len(args) > 1 and args[1] else None
+    cfg = config.load()
+    if not cfg.get("enabled"):
+        return 0
+    uuid, text = _wait_for_new(path, before)
     if text is None:
+        return 0
+    if uuid == _read_last_spoken():  # an overlapping worker already spoke it
         return 0
     line = transcript.spoken_from_response(
         text,
@@ -97,7 +120,6 @@ def cmd_stop(_args):
         _write_last_spoken(uuid)
         speak.speak(line, cfg)
     return 0
-
 
 def cmd_hush(_args):
     """UserPromptSubmit hook: cut off old speech, then acknowledge instantly.
@@ -195,6 +217,7 @@ def cmd_test(args):
 
 COMMANDS = {
     "stop": cmd_stop,
+    "speak-latest": cmd_speak_latest,
     "hush": cmd_hush,
     "opener": cmd_opener,
     "session-start": cmd_session_start,
@@ -204,7 +227,7 @@ COMMANDS = {
     "test": cmd_test,
 }
 
-HOOKS = {"stop", "hush", "session-start", "opener"}
+HOOKS = {"stop", "speak-latest", "hush", "session-start", "opener"}
 
 
 def main(argv=None):

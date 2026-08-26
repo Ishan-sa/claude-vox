@@ -49,16 +49,16 @@ class LastAssistantEntryTest(unittest.TestCase):
 class FreshEntryTest(unittest.TestCase):
     def test_new_entry_returned_immediately(self):
         path = write_transcript([assistant("old", "a"), assistant("new", "b")])
-        self.assertEqual(cli._fresh_entry(path, "a", wait=0.05), ("b", "new"))
+        self.assertEqual(cli._wait_for_new(path, "a", wait=0.05), ("b", "new"))
 
     def test_no_previous_state_returns_newest(self):
         path = write_transcript([assistant("only", "a")])
-        self.assertEqual(cli._fresh_entry(path, None, wait=0.05), ("a", "only"))
+        self.assertEqual(cli._wait_for_new(path, None, wait=0.05), ("a", "only"))
 
     def test_stale_read_is_not_spoken_again(self):
         """The hook firing before the response is flushed must stay silent."""
         path = write_transcript([assistant("already said", "a")])
-        self.assertEqual(cli._fresh_entry(path, "a", wait=0.05), (None, None))
+        self.assertEqual(cli._wait_for_new(path, "a", wait=0.05), (None, None))
 
     def test_waits_for_a_late_write(self):
         """A response flushed just after the hook fires is still spoken."""
@@ -69,7 +69,7 @@ class FreshEntryTest(unittest.TestCase):
             append(path, assistant("the real one", "b"))
 
         threading.Thread(target=late, daemon=True).start()
-        self.assertEqual(cli._fresh_entry(path, "a", wait=2.0, interval=0.05),
+        self.assertEqual(cli._wait_for_new(path, "a", wait=2.0, interval=0.05),
                          ("b", "the real one"))
 
 
