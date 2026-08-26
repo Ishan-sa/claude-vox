@@ -60,6 +60,42 @@ def last_assistant_text(path):
     return last_assistant_entry(path)[1]
 
 
+def first_working_intro(path, before=None):
+    """(uuid, text) of the line Claude says as it starts working.
+
+    In a working turn the transcript reads: a text block ("I'll dig into the
+    dropdown.") followed by a separate tool_use entry. That first text block,
+    once a tool call confirms work has begun, is what we speak live. Only
+    entries after `before` (the newest uuid when the turn started) count, so a
+    caller can poll: (None, None) means either no text yet or no tool call yet,
+    both of which just mean "keep waiting". A text-only reply never produces a
+    tool call, so it correctly yields no live intro - the Stop summary covers
+    it instead.
+    """
+    passed = before is None
+    candidate = None
+    for entry in iter_entries(path):
+        if entry.get("type") != "assistant" or entry.get("isSidechain"):
+            continue
+        uuid = entry.get("uuid")
+        if not passed:
+            if uuid == before:
+                passed = True
+            continue
+        content = entry.get("message", {}).get("content")
+        if not isinstance(content, list):
+            continue
+        kinds = [b.get("type") for b in content if isinstance(b, dict)]
+        if candidate is None:
+            for block in content:
+                if block.get("type") == "text" and (block.get("text") or "").strip():
+                    candidate = (uuid, block["text"].strip())
+                    break
+        if candidate and "tool_use" in kinds:
+            return candidate
+    return None, None
+
+
 def extract_marked_line(text, marker=DEFAULT_MARKER):
     """Return the spoken text from the last marker line, or None if unmarked.
 
@@ -210,6 +246,14 @@ def spoken_from_response(text, mode="bookends", marker=DEFAULT_MARKER, limit=280
     "intro", "summary", or "bookends" (intro then summary, read as one line).
     """
     marked = extract_marked_line(text, marker)
+    if mode == "assistant":
+        # The model writes its own spoken summary on the marker line; groom it
+        # for the ear. With no marker line, fall back to the closing prose so a
+        # response is never left unspoken.
+        if marked:
+            return speakable(marked, limit)
+        _, summary = natural_segments(text, limit)
+        return speakable(summary, limit) if summary else None
     if marked:
         return marked
     if mode == "marker":
