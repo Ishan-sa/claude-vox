@@ -43,7 +43,12 @@ The installer copies the code to `~/.claude/vox/`, registers three hooks in
 `~/.claude/settings.json` (backing up the old file first), installs the `/vox`
 slash command, and writes a config tuned to whatever it finds on your machine.
 
-Then restart Claude Code and turn it on:
+**Restart Claude Code before this takes effect.** Hooks are read once, at
+startup -- any session that was already open when you installed will stay
+silent until you reopen it. This is the most common "installed but nothing
+speaks" surprise.
+
+Then, in a fresh session, turn it on:
 
 ```
 /vox on
