@@ -177,11 +177,17 @@ def cmd_opener(args):
     else:
         cfg = config.load()
     opener = cfg.get("opener", {})
-    if opener.get("enabled"):
-        print("opener is ON - one of %d phrases is spoken the moment you "
-              "submit a prompt." % len(opener.get("phrases") or []))
-    else:
+    phrases = opener.get("phrases") or []
+    if not opener.get("enabled"):
         print("opener is OFF - nothing is spoken until the turn finishes.")
+    elif phrases:
+        print("opener is ON - one of %d phrases is spoken the moment you "
+              "submit a prompt." % len(phrases))
+    else:
+        # Silently doing nothing would look like a broken switch.
+        print("opener is ON, but no phrases are configured, so nothing will "
+              "be spoken. Add your own to \"opener\": {\"phrases\": [...]} in")
+        print("  %s" % config.config_path())
     return 0
 
 

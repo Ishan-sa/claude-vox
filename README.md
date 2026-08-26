@@ -102,14 +102,21 @@ In any mode, if the model writes a line beginning with the `🔊` marker, that e
 ### The instant opener (optional, off by default)
 
 If you also want a sound the *instant* you hit enter -- before Claude has
-written anything -- turn on the opener. It speaks a short rotating phrase
-("On it, Sir.") from a cache, so it plays with no delay and never holds up your
-prompt. It is off by default because the intro paragraph already gives a
-content-aware opening; enable it only if you want that extra immediate ack.
+written anything -- turn on the opener. It speaks a short phrase from a cache,
+so it plays with no delay and never holds up your prompt. It is off by default
+because the intro paragraph already gives a content-aware opening; enable it
+only if you want that extra immediate ack.
+
+**No phrases ship with it.** Whatever it says, you wrote -- a stock line you did
+not choose, announcing every single turn, wears out fast, and tracking down
+where it came from is worse. Give it words and it speaks; leave it empty and it
+stays quiet whatever the switch says.
 
 ```json
-{ "opener": { "enabled": true, "phrases": ["On it, Sir.", "Working on it."] } }
+{ "opener": { "enabled": true, "phrases": ["On it.", "Working on it."] } }
 ```
+
+`/vox opener on` and `/vox opener off` flip it without opening the file.
 
 
 ## A better voice
@@ -121,7 +128,7 @@ your work you will want something else.
 ```bash
 ./setup-edge-tts.sh                      # en-GB-RyanNeural, a British male
 ./setup-edge-tts.sh en-US-GuyNeural      # or name any voice you like
-./setup-edge-tts.sh --opener             # and speak an instant acknowledgement
+./setup-edge-tts.sh --opener             # and pre-render your opener phrases
 ```
 
 This reaches Microsoft's neural voices through `edge-tts`. No API key, no
@@ -247,7 +254,7 @@ the `command` backend the voice is a flag instead, e.g. `["say", "-v", "Daniel",
 | `max_chars` | `400` | Longer lines are truncated at a word boundary |
 | `timeout` | `8` | Seconds to wait on the `http` backend |
 | `opener.enabled` | `false` | Speak an extra short line the moment a prompt is submitted. `/vox opener on\|off` flips it; `/vox status` shows it |
-| `opener.phrases` | *(list)* | The lines to rotate through; synthesised once, then cached |
+| `opener.phrases` | *(empty)* | Your lines to rotate through; synthesised once, then cached. Nothing canned ships -- empty means silent |
 
 ## Troubleshooting
 
@@ -256,9 +263,10 @@ says ON, run `/vox test`: that isolates the audio path from the hook path. If
 the test is silent, the backend is wrong; if the test works but real responses
 are not spoken, the model is not writing the marker line, so re-run `/vox on`.
 
-**It says "one moment" before every response.** That is the opener, and it is
-off by default -- something turned it on. `/vox opener off` silences it without
-touching anything else, and `/vox status` shows where it stands.
+**Something says a stock phrase before every response.** That is the opener.
+It is off by default and ships with no phrases, so both were set deliberately
+at some point. `/vox opener off` silences it without touching anything else,
+and `/vox status` shows where it stands.
 
 **It speaks but the hooks never fire.** Hooks are read at startup -- restart
 Claude Code after installing.

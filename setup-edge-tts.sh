@@ -85,6 +85,12 @@ opener = cfg.get("opener", {})
 if not opener.get("enabled"):
     sys.exit(0)
 phrases = opener.get("phrases") or []
+if not phrases:
+    # No phrases ship with vox by design -- see DEFAULTS in config.py.
+    print("Opener is on but has no phrases, so it will stay silent.")
+    print("Add your own to \"opener\": {\"phrases\": [...]} in")
+    print("  %s" % config.config_path())
+    sys.exit(0)
 print("Pre-rendering %d opener phrase(s):" % len(phrases))
 for phrase in phrases:
     subprocess.call([backend, "--prewarm", voice, phrase])
