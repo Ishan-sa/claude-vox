@@ -11,9 +11,12 @@ command -v python3 >/dev/null || { echo "claude-vox needs python3 on PATH"; exit
 
 echo "Installing claude-vox -> $DEST"
 mkdir -p "$DEST" "$CLAUDE_DIR/commands"
-# Preserve config.json and playing.pid; replace only the code.
-rm -rf "$DEST/claude_vox"
+# Preserve config.json, playing.pid, and any venv/cache a voice backend
+# built; replace only the code.
+rm -rf "$DEST/claude_vox" "$DEST/backends"
 cp -r "$SRC/claude_vox" "$DEST/claude_vox"
+cp -r "$SRC/backends" "$DEST/backends"
+chmod +x "$DEST/backends"/*.sh
 cp "$SRC/vox.py" "$DEST/vox.py"
 chmod +x "$DEST/vox.py"
 cp "$SRC/commands/vox.md" "$CLAUDE_DIR/commands/vox.md"
@@ -30,3 +33,5 @@ echo
 echo "Next:"
 echo "  1. python3 $DEST/vox.py test     # confirm you hear it"
 echo "  2. restart Claude Code, then run: /vox on"
+echo
+echo "For a neural voice instead of the stock one: ./setup-edge-tts.sh"

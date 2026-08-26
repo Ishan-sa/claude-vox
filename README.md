@@ -66,6 +66,10 @@ Then, in a fresh session, turn it on:
 `/vox off` to stop, `/vox status` to see what is configured, `/vox test` to
 hear a line right now without enabling anything.
 
+The voice you get out of the box is whatever your OS ships -- clear enough, but
+plainly synthetic. For a neural one, see [a better voice](#a-better-voice)
+below; it is one extra command and still needs no API key.
+
 To remove it: `./uninstall.sh` (add `--purge` to delete the config too).
 
 ## How it works
@@ -107,6 +111,46 @@ content-aware opening; enable it only if you want that extra immediate ack.
 ```
 
 
+## A better voice
+
+The stock voices are the ones your operating system already had. They are
+intelligible and they are free, and after an hour of listening to one narrate
+your work you will want something else.
+
+```bash
+./setup-edge-tts.sh                      # en-GB-RyanNeural, a British male
+./setup-edge-tts.sh en-US-GuyNeural      # or name any voice you like
+./setup-edge-tts.sh --opener             # and speak an instant acknowledgement
+```
+
+This reaches Microsoft's neural voices through `edge-tts`. No API key, no
+account, no per-word billing. It is the only dependency this project has, and
+it goes into its own virtualenv under `~/.claude/vox/venv`, so nothing lands on
+your system Python. `--list-voices` on that venv's `edge-tts` prints the
+several hundred voices available.
+
+It stays out of the way of the two things that actually matter in a hook:
+
+**It is never the reason a turn goes quiet.** If the network is down, or
+Microsoft is having a bad afternoon, or you deleted the venv, it speaks the
+line through the offline OS voice instead. Worse audio beats no audio when the
+point is to tell you something finished.
+
+**It does not make you wait to be acknowledged.** Neural synthesis is a network
+round-trip, which is fine at the end of a turn and far too slow for the opener
+that fires the instant you press enter. So short lines are cached on disk by
+voice, prosody and text: the setup script pre-renders your opener phrases, and
+from then on they play immediately. Long lines are spoken once and never
+repeated, so they are not worth caching and are cleaned up after playback.
+
+Three environment variables tune it, should you want to:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `VOX_RATE` | `-4%` | Speaking rate. Slightly slow reads as composed rather than chirpy |
+| `VOX_PITCH` | `-4Hz` | Pitch shift. Slightly low puts some chest behind it |
+| `VOX_FALLBACK_VOICE` | `Daniel` | The offline voice used when synthesis fails |
+
 ## Configuration
 
 `~/.claude/vox/config.json`. Two backends cover essentially any setup.
@@ -124,7 +168,9 @@ The default on most machines. The installer picks whichever of `say`,
 ```
 
 `{text}` is replaced with the line to speak. Anything that synthesises from
-argv works -- including Piper:
+argv works. `setup-edge-tts.sh` above is exactly this: it points `argv` at
+`backends/edge-tts.sh`, which synthesises, plays, and caches. Piper works the
+same way:
 
 ```json
 {
