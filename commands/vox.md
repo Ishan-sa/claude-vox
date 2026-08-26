@@ -5,6 +5,7 @@ allowed-tools: Bash(python3:*)
 
 !`python3 "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/vox/vox.py" ${ARGUMENTS:-status}`
 
-The output above is from claude-vox. If it says voice mode is ON, follow the
-marker instruction it printed for the rest of this session. If it says OFF,
-stop appending the spoken marker line. Acknowledge in one short sentence.
+The line above is claude-vox's own status output. Relay it to me in one short
+sentence. Do NOT change how you write your responses -- claude-vox reads your
+normal prose automatically. Only if it explicitly printed a marker instruction
+(that happens in "marker" mode) should you follow it.
