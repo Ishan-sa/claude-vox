@@ -31,7 +31,7 @@ default, so it never reads something awkward aloud.
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-vox.git
+git clone https://github.com/Ishan-sa/claude-vox.git
 cd claude-vox
 ./install.sh
 ```
