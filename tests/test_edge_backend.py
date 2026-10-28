@@ -155,6 +155,30 @@ class Fallback(EdgeBackend):
                            env={"STUB_EDGE_FAIL": "1"})
         self.assertEqual(result.returncode, 0)
 
+    def _fallback_note(self):
+        try:
+            with open(os.path.join(self.vox_home, "last_fallback"),
+                      encoding="utf-8") as fh:
+                return fh.read()
+        except IOError:
+            return None
+
+    def test_a_fallback_leaves_a_note_saying_why(self):
+        # Without it a broken venv speaks in the wrong voice for weeks and
+        # nothing anywhere says so.
+        self._run("en-GB-RyanNeural", "On it, Sir.", env={"STUB_EDGE_FAIL": "1"})
+        self.assertIn("synthesis failed", self._fallback_note())
+
+    def test_a_missing_synthesiser_is_named_in_the_note(self):
+        os.remove(os.path.join(self.vox_home, "venv", "bin", "edge-tts"))
+        self._run("en-GB-RyanNeural", "On it, Sir.")
+        self.assertIn("edge-tts not found", self._fallback_note())
+
+    def test_the_next_successful_synthesis_clears_the_note(self):
+        self._run("en-GB-RyanNeural", "On it, Sir.", env={"STUB_EDGE_FAIL": "1"})
+        self._run("en-GB-RyanNeural", "On it, Sir.")
+        self.assertIsNone(self._fallback_note())
+
     def test_empty_text_is_a_silent_no_op(self):
         result = self._run("en-GB-RyanNeural", "   ")
         self.assertEqual(result.returncode, 0)

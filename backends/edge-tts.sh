@@ -99,7 +99,14 @@ sha1() {
 }
 
 # The offline safety net, in the order most likely to exist per platform.
-speak_offline() {
+#
+# Falling back is right for one line and wrong for weeks, so it leaves a note
+# (FALLBACK_FILE in claude_vox/health.py -- keep the names in step) that
+# `vox status` and the next session start turn into a visible warning. The
+# next successful synthesis clears it.
+speak_offline() {  # speak_offline <reason>
+    mkdir -p "$VOX_HOME" 2>/dev/null || true
+    printf '%s %s\n' "$(date +%s)" "$1" > "$VOX_HOME/last_fallback" 2>/dev/null || true
     [ "$PREWARM" -eq 1 ] && exit 0   # nothing to warm if we cannot synthesise
     if command -v say >/dev/null 2>&1; then
         say -v "${VOX_FALLBACK_VOICE:-Daniel}" "$TEXT" 2>/dev/null \
@@ -115,9 +122,9 @@ speak_offline() {
 }
 
 EDGE="$(find_edge || true)"
-[ -n "$EDGE" ] && [ -x "$EDGE" ] || speak_offline
+[ -n "$EDGE" ] && [ -x "$EDGE" ] || speak_offline "edge-tts not found"
 PLAYER="$(find_player || true)"
-[ -n "$PLAYER" ] || speak_offline
+[ -n "$PLAYER" ] || speak_offline "no audio player found"
 
 # --- synthesis --------------------------------------------------------------
 
@@ -127,8 +134,11 @@ synth() {  # synth <outfile>
     # which a hook would swallow into silence. Keep the equals sign.
     "$EDGE" --voice "$VOICE" --rate="$RATE" --pitch="$PITCH" \
             --text "$TEXT" --write-media "$1" >/dev/null 2>&1 \
-        && [ -s "$1" ]
+        && [ -s "$1" ] \
+        && rm -f "$VOX_HOME/last_fallback"
 }
+
+SYNTH_FAILED="synthesis failed: offline, or edge-tts broken or out of date"
 
 prune_cache() {
     # Bounded, not clever: openers rotate through a fixed set, but /vox test
@@ -152,7 +162,7 @@ if [ -n "$key" ]; then
     if [ ! -s "$audio" ]; then
         # Synthesise to a partial file and rename, so a killed run never leaves
         # a truncated mp3 that would be treated as a valid cache hit forever.
-        synth "$audio.part" || { rm -f "$audio.part"; speak_offline; }
+        synth "$audio.part" || { rm -f "$audio.part"; speak_offline "$SYNTH_FAILED"; }
         mv "$audio.part" "$audio"
         prune_cache
     fi
@@ -173,7 +183,7 @@ find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'vox-*' -type f -mmin +60 -delete 2>/de
 reserved="$(mktemp "${TMPDIR:-/tmp}/vox-XXXXXX")"
 audio="$reserved.mp3"
 mv "$reserved" "$audio"
-synth "$audio" || { rm -f "$audio"; speak_offline; }
+synth "$audio" || { rm -f "$audio"; speak_offline "$SYNTH_FAILED"; }
 play "$audio"
 rm -f "$audio"
 exit 0

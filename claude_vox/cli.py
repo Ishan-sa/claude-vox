@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-from . import config, speak, transcript
+from . import config, health, speak, transcript
 
 INSTRUCTION = (
     "Voice mode (claude-vox) is ON. End every response to the user with a "
@@ -38,6 +38,11 @@ ASSISTANT_INSTRUCTION = (
     "key, so the saved value showed blank. Verified across every screen that uses it.\n"
     "Omit the line only for a bare acknowledgement that needs nothing spoken."
 )
+
+
+WARNING_CONTEXT = (
+    "%s Tell the user this in one short sentence at the start of your first "
+    "reply, and that /vox repair rebuilds it.")
 
 
 def _instruction_for(cfg):
@@ -293,12 +298,21 @@ def cmd_session_start(_args):
     if not cfg.get("enabled"):
         return 0
     context = _instruction_for(cfg)
+    # A broken neural voice falls back to the offline one without a sound of
+    # complaint, so say so here: systemMessage reaches the user directly, and
+    # the context line has Claude raise it in its first reply too.
+    warning = health.warning(cfg)
+    if warning:
+        context = "\n\n".join(filter(None, [context, WARNING_CONTEXT % warning]))
     if not context:
         return 0
-    json.dump({"hookSpecificOutput": {
+    output = {"hookSpecificOutput": {
         "hookEventName": "SessionStart",
         "additionalContext": context,
-    }}, sys.stdout)
+    }}
+    if warning:
+        output["systemMessage"] = warning
+    json.dump(output, sys.stdout)
     return 0
 
 
@@ -334,6 +348,10 @@ def cmd_status(_args):
         print("  argv:    %s" % " ".join(cfg.get("command", {}).get("argv", [])))
     print("  opener:  %s" % ("on" if cfg.get("opener", {}).get("enabled")
                                 else "off"))
+    if health.uses_edge(cfg):
+        reason = health.problem(cfg)
+        print("  voice:   %s" % ("BROKEN - %s. Run /vox repair." % reason
+                                 if reason else "ok"))
     print("  marker:  %s" % cfg.get("marker"))
     print("  config:  %s" % config.config_path())
     return 0
@@ -342,9 +360,27 @@ def cmd_status(_args):
 def cmd_test(args):
     """Speak a line right now, bypassing the enabled flag."""
     text = " ".join(args) or "Voice check. Claude vox is online and speaking."
-    ok = speak.speak(text, config.load())
+    cfg = config.load()
+    ok = speak.speak(text, cfg)
     print("spoke: %s" % text if ok else "failed - check `vox status` and your backend")
+    warning = health.warning(cfg)
+    if warning:
+        print(warning)
     return 0 if ok else 1
+
+
+def cmd_repair(_args):
+    """Rebuild the edge-tts venv, the usual cure for a voice that changed."""
+    cfg = config.load()
+    if not health.uses_edge(cfg):
+        print("repair only applies to the edge-tts backend; this config uses "
+              "'%s'." % cfg.get("backend"))
+        return 0
+    if not health.repair():
+        return 1
+    print("Repaired - the %s voice is back. `/vox test` to hear it."
+          % health.voice_name(cfg))
+    return 0
 
 
 COMMANDS = {
@@ -359,6 +395,7 @@ COMMANDS = {
     "off": cmd_off,
     "status": cmd_status,
     "test": cmd_test,
+    "repair": cmd_repair,
 }
 
 HOOKS = {"stop", "speak-latest", "speak-intro", "hush", "session-start",

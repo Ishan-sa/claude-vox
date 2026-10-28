@@ -1,5 +1,5 @@
 ---
-description: Toggle spoken responses (claude-vox) - on, off, status, test, or opener
+description: Toggle spoken responses (claude-vox) - on, off, status, test, opener, or repair
 allowed-tools: Bash(python3:*)
 ---
 

@@ -74,7 +74,8 @@ Then, in a fresh session, turn it on:
 
 `/vox off` to stop, `/vox status` to see what is configured, `/vox test` to
 hear a line right now without enabling anything, `/vox opener off` to silence
-the instant acknowledgement while leaving the rest speaking.
+the instant acknowledgement while leaving the rest speaking, `/vox repair` to
+rebuild the neural voice if it ever breaks.
 
 The voice you get out of the box is whatever your OS ships -- clear enough, but
 plainly synthetic. For a neural one, see [a better voice](#a-better-voice)
@@ -184,6 +185,12 @@ It stays out of the way of the two things that actually matter in a hook:
 Microsoft is having a bad afternoon, or you deleted the venv, it speaks the
 line through the offline OS voice instead. Worse audio beats no audio when the
 point is to tell you something finished.
+
+But it does not do so quietly. Each fallback leaves a note saying why, and the
+next session opens with a warning -- shown to you, and raised by Claude in its
+first reply -- until the neural voice works again. `/vox status` shows the same
+check on its `voice:` line. Without that, a broken venv just sounds like a
+different voice, and you can go weeks without knowing why.
 
 **It does not make you wait to be acknowledged.** Neural synthesis is a network
 round-trip, which is fine at the end of a turn and far too slow for the opener
@@ -315,6 +322,13 @@ It also needs a session started after install, since it rides the
 It is off by default and ships with no phrases, so both were set deliberately
 at some point. `/vox opener off` silences it without touching anything else,
 and `/vox status` shows where it stands.
+
+**The voice changed to a different, flatter one.** The neural voice broke and
+the offline fallback took over. The usual cause is a Homebrew Python upgrade:
+the venv under `~/.claude/vox/venv` points at an interpreter that no longer
+exists. `/vox status` says why on its `voice:` line, and `/vox repair` rebuilds
+the venv on your current Python. If it still falls back afterwards, you are
+offline or `edge-tts` needs a newer release; `/vox repair` upgrades that too.
 
 **It speaks but the hooks never fire.** Hooks are read at startup -- restart
 Claude Code after installing.
